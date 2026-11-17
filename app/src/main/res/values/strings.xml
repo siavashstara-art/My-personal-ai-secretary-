@@ -1,4 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Personal AI Creative Studio</string>
+    <string name="studio_title">PERSONAL AI CREATIVE STUDIO</string>
+    <string name="studio_owner_subtitle">Owner: Siavash Ali-Miri | Creative Modules: PARKED • Secretary &amp; Dev Hub: ACTIVE</string>
+    <string name="nav_secretary">Secretary</string>
+    <string name="nav_dev_hub">GitHub &amp; Code</string>
+    <string name="nav_studio">Studio</string>
+    <string name="nav_ai">Gemini AI</string>
+    <string name="hero_banner_cd">Personal AI Creative Studio and developer command center banner</string>
+    <string name="copy_success">Copied to clipboard</string>
+    <string name="no_app_installed">App is not installed on this device</string>
 </resources>
