@@ -1,0 +1,6 @@
+{
+  "name": "Personal AI Creative Studio",
+  "description": "Personal AI-powered creative studio for fictional character creation, virtual clothing try-on, fashion visualization, image editing, and creative scene production.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
