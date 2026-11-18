@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.BuildConfig
 import com.example.data.AiRepository
 import com.example.data.CodingAppsCatalog
 import com.example.data.GitHubRepository
@@ -207,7 +208,12 @@ class StudioViewModel(
     private val _gitHubUsername = MutableStateFlow("siavashstara-art")
     val gitHubUsername: StateFlow<String> = _gitHubUsername.asStateFlow()
 
-    private val _gitHubToken = MutableStateFlow("")
+    private val _gitHubToken = MutableStateFlow(
+        BuildConfig.GITHUB_PERSONAL_TOKEN
+            .trim()
+            .takeIf { it.isNotBlank() && it != "OPTIONAL_SET_IN_SECRETS_PANEL" }
+            .orEmpty()
+    )
     val gitHubToken: StateFlow<String> = _gitHubToken.asStateFlow()
 
     private val _gitHubState = MutableStateFlow<GitHubLoadState>(GitHubLoadState.Idle)

@@ -244,6 +244,11 @@ object CodingAppsCatalog {
             title = "Quick Commit & Push",
             description = "Stage, commit, and push local changes from Termux",
             command = "git status && git add . && git commit -m \"Update from mobile\" && git push"
+        ),
+        TermuxCommand(
+            title = "Build Signed Release APK & AAB",
+            description = "Restores keystore if needed and builds both app-release.apk and app-release.aab",
+            command = "[ -f debug.keystore ] || base64 -d debug.keystore.base64 > debug.keystore && chmod +x ./gradlew && ./gradlew assembleRelease bundleRelease"
         )
     )
 }
