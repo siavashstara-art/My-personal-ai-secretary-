@@ -39,6 +39,14 @@ jobs:
             cp .env.example .env
           fi
 
+      - name: Ensure google-services.json is in app/
+        run: |
+          if [ ! -f app/google-services.json ] && [ -f google-services.json ]; then
+            cp google-services.json app/google-services.json
+          elif [ ! -f app/google-services.json ]; then
+            echo '{"project_info":{"project_number":"373372102070","project_id":"gen-lang-client-0872918595"},"client":[{"client_info":{"mobilesdk_app_id":"1:373372102070:android:3b846065f0d66a4b5b0d17","android_client_info":{"package_name":"com.aistudio.creativestudio.xmzpqr"}}}],"configuration_version":"1"}' > app/google-services.json
+          fi
+
       - name: Make Gradle Wrapper executable
         run: chmod +x ./gradlew
 
@@ -57,7 +65,7 @@ jobs:
       - name: Upload Signed Release AAB
         uses: actions/upload-artifact@v4
         with:
-          name: PersonalAICreativeStudio-Release-AAB
+          name: PersonalAICretiveStudio-Release-AAB
           path: app/build/outputs/bundle/release/*.aab
 
       - name: Upload Debug APK
