@@ -5,6 +5,7 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import com.example.model.AssistantPersona
+import com.example.model.CompositeEmotion
 import java.util.Locale
 
 private const val TAG = "PersonaVoicePlayer"
@@ -16,6 +17,8 @@ class PersonaVoicePlayer(
 
     private var tts: TextToSpeech? = TextToSpeech(context.applicationContext, this)
     private var isReady = false
+    @Volatile
+    private var activeFinalUtteranceId: String? = null
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
@@ -26,7 +29,9 @@ class PersonaVoicePlayer(
                 }
 
                 override fun onDone(utteranceId: String?) {
-                    onSpeakingStateChanged(false)
+                    if (utteranceId == null || utteranceId == activeFinalUtteranceId) {
+                        onSpeakingStateChanged(false)
+                    }
                 }
 
                 @Deprecated("Deprecated in Java")
@@ -43,7 +48,11 @@ class PersonaVoicePlayer(
         }
     }
 
-    fun speak(text: String, persona: AssistantPersona) {
+    fun speak(
+        text: String,
+        persona: AssistantPersona,
+        emotion: CompositeEmotion = CompositeEmotion.SereneDevotion
+    ) {
         val engine = tts ?: return
         if (!isReady || text.isBlank()) return
 
@@ -54,23 +63,102 @@ class PersonaVoicePlayer(
             engine.setLanguage(Locale.US)
         }
 
-        engine.setPitch(persona.voicePitch)
-        engine.setSpeechRate(persona.voiceRate)
+        val sanitized = sanitizeForNaturalSpeech(text).take(1800)
+        if (sanitized.isBlank()) return
 
-        val cleanedText = text
+        val segments = splitIntoExpressiveSegments(sanitized)
+        if (segments.isEmpty()) return
+
+        val basePitch = (persona.voicePitch * emotion.pitchMultiplier).coerceIn(0.65f, 1.45f)
+        val baseRate = (persona.voiceRate * emotion.rateMultiplier).coerceIn(0.75f, 1.35f)
+        val sessionNonce = System.currentTimeMillis()
+        val lastIndex = segments.lastIndex
+        activeFinalUtteranceId = "persona_${persona.id}_${sessionNonce}_$lastIndex"
+
+        segments.forEachIndexed { idx, seg ->
+            val clausePitch = (basePitch + seg.pitchOffset).coerceIn(0.65f, 1.45f)
+            val clauseRate = (baseRate + seg.rateOffset).coerceIn(0.75f, 1.35f)
+            engine.setPitch(clausePitch)
+            engine.setSpeechRate(clauseRate)
+
+            val mode = if (idx == 0) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
+            val uttId = "persona_${persona.id}_${sessionNonce}_$idx"
+            engine.speak(seg.spokenText, mode, null, uttId)
+
+            if (idx < lastIndex && seg.pauseAfterMs > 0L) {
+                engine.playSilentUtterance(
+                    seg.pauseAfterMs,
+                    TextToSpeech.QUEUE_ADD,
+                    "pause_${sessionNonce}_$idx"
+                )
+            }
+        }
+    }
+
+    private data class ExpressiveSegment(
+        val spokenText: String,
+        val pitchOffset: Float,
+        val rateOffset: Float,
+        val pauseAfterMs: Long
+    )
+
+    private fun sanitizeForNaturalSpeech(raw: String): String {
+        return raw
+            .replace(Regex("\\[THINK][\\s\\S]*?\\[/THINK]"), "")
+            .replace("[ANSWER]", "")
+            .replace("[/ANSWER]", "")
+            .replace(Regex("https?://\\S+"), "")
             .replace("*", "")
             .replace("#", "")
-            .take(1500)
+            .replace("`", "")
+            .replace("—", "، ")
+            .replace("•", "، ")
+            .trim()
+    }
 
-        engine.speak(cleanedText, TextToSpeech.QUEUE_FLUSH, null, "persona_${persona.id}")
+    private fun splitIntoExpressiveSegments(text: String): List<ExpressiveSegment> {
+        val rawChunks = text.split(Regex("(?<=[.!؟?\\n])\\s+|(?<=\\.\\.\\.)\\s*"))
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+
+        return rawChunks.map { chunk ->
+            val hasExclamation = chunk.contains('!')
+            val hasQuestion = chunk.contains('؟') || chunk.contains('?')
+            val hasEllipsis = chunk.contains("...") || chunk.contains('…')
+
+            val pitchOffset = when {
+                hasExclamation -> 0.05f
+                hasQuestion -> 0.04f
+                hasEllipsis -> -0.03f
+                else -> 0.0f
+            }
+            val rateOffset = when {
+                hasExclamation -> 0.04f
+                hasEllipsis -> -0.05f
+                else -> 0.0f
+            }
+            val pauseMs = when {
+                hasEllipsis -> 280L
+                hasExclamation || hasQuestion -> 210L
+                else -> 150L
+            }
+            ExpressiveSegment(
+                spokenText = chunk,
+                pitchOffset = pitchOffset,
+                rateOffset = rateOffset,
+                pauseAfterMs = pauseMs
+            )
+        }
     }
 
     fun stop() {
+        activeFinalUtteranceId = null
         tts?.stop()
         onSpeakingStateChanged(false)
     }
 
     fun release() {
+        activeFinalUtteranceId = null
         tts?.stop()
         tts?.shutdown()
         tts = null

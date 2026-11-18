@@ -9,10 +9,14 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Launch
@@ -43,19 +47,26 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.example.model.AiCodePatchSuggestion
 import com.example.model.AiUiState
 import com.example.model.ApprovalStatus
+import com.example.model.AssistantPersona
 import com.example.model.CodingAppInfo
+import com.example.model.DeployTemplateType
 import com.example.model.DevHubMode
 import com.example.model.GitHubLoadState
+import com.example.model.GitHubPushState
+import com.example.model.ImportedProjectWorkspace
 import com.example.model.TermuxCommand
 import com.example.model.UpgradeProposal
 import com.example.ui.components.AndroidIntentActions
 import com.example.ui.components.StatusPill
 import com.example.ui.components.StudioCard
+import com.example.ui.components.ZipProjectWorkspaceSection
 
 @Composable
 fun DevHubScreen(
+    selectedPersona: AssistantPersona,
     devHubMode: DevHubMode,
     username: String,
     token: String,
@@ -68,6 +79,25 @@ fun DevHubScreen(
     upgradeError: String?,
     capabilityRunInput: String,
     capabilityRunState: AiUiState,
+    savedWorkspaces: List<ImportedProjectWorkspace>,
+    activeWorkspace: ImportedProjectWorkspace?,
+    selectedWorkspaceFilePath: String,
+    openFileContent: String,
+    isOpenFileModified: Boolean,
+    newFilePathInput: String,
+    codeAiInstruction: String,
+    projectAuditState: AiUiState,
+    codePatchLoading: Boolean,
+    codePatchSuggestion: AiCodePatchSuggestion?,
+    errorLogInput: String,
+    selfBugFixLoading: Boolean,
+    selfBugFixSuggestion: AiCodePatchSuggestion?,
+    workspaceStatusMessage: String?,
+    gitHubTargetRepo: String,
+    gitHubBranch: String,
+    gitHubCommitMessage: String,
+    gitHubPushPrivate: Boolean,
+    gitHubPushState: GitHubPushState,
     onSelectDevHubMode: (DevHubMode) -> Unit,
     onUsernameChange: (String) -> Unit,
     onTokenChange: (String) -> Unit,
@@ -80,6 +110,28 @@ fun DevHubScreen(
     onRejectProposal: (Long) -> Unit,
     onCapabilityRunInputChange: (String) -> Unit,
     onRunApprovedCapability: (UpgradeProposal) -> Unit,
+    onImportZipUri: (android.net.Uri) -> Unit,
+    onExportZipUri: (android.net.Uri) -> Unit,
+    onSelectWorkspace: (ImportedProjectWorkspace) -> Unit,
+    onDeleteWorkspace: (String) -> Unit,
+    onOpenWorkspaceFile: (String) -> Unit,
+    onOpenFileContentChange: (String) -> Unit,
+    onSaveOpenFile: () -> Unit,
+    onNewFilePathChange: (String) -> Unit,
+    onCreateNewWorkspaceFile: () -> Unit,
+    onCodeAiInstructionChange: (String) -> Unit,
+    onErrorLogChange: (String) -> Unit,
+    onAuditProject: () -> Unit,
+    onGenerateCodePatch: () -> Unit,
+    onFixWorkspaceError: () -> Unit,
+    onFixSelfError: () -> Unit,
+    onApplyCodePatch: () -> Unit,
+    onInsertDeployTemplate: (DeployTemplateType) -> Unit,
+    onGitHubTargetRepoChange: (String) -> Unit,
+    onGitHubBranchChange: (String) -> Unit,
+    onGitHubCommitMessageChange: (String) -> Unit,
+    onToggleGitHubPushPrivate: () -> Unit,
+    onPushToGitHub: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -95,11 +147,24 @@ fun DevHubScreen(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Sub-mode switcher: GitHub & Termux vs Self-Upgrade Architect
+        // Sub-mode switcher: ZIP Project Studio vs GitHub & Termux vs Self-Upgrade Architect
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            FilterChip(
+                selected = devHubMode == DevHubMode.ZipProjectStudio,
+                onClick = { onSelectDevHubMode(DevHubMode.ZipProjectStudio) },
+                label = { Text("پروژه ZIP و دپلو") },
+                leadingIcon = {
+                    Icon(Icons.Filled.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
+                },
+                modifier = Modifier
+                    .heightIn(min = 48.dp)
+                    .testTag("devhub_mode_zip_studio")
+            )
             FilterChip(
                 selected = devHubMode == DevHubMode.GitHubAndTermux,
                 onClick = { onSelectDevHubMode(DevHubMode.GitHubAndTermux) },
@@ -108,22 +173,67 @@ fun DevHubScreen(
                     Icon(Icons.Filled.Terminal, contentDescription = null, modifier = Modifier.size(18.dp))
                 },
                 modifier = Modifier
-                    .weight(1f)
                     .heightIn(min = 48.dp)
                     .testTag("devhub_mode_github")
             )
             FilterChip(
                 selected = devHubMode == DevHubMode.SelfUpgradeArchitect,
                 onClick = { onSelectDevHubMode(DevHubMode.SelfUpgradeArchitect) },
-                label = { Text("ارتقا و قابلیت‌ها") },
+                label = { Text("ارتقا و دیباگ خود") },
                 leadingIcon = {
                     Icon(Icons.Filled.Upgrade, contentDescription = null, modifier = Modifier.size(18.dp))
                 },
                 modifier = Modifier
-                    .weight(1f)
                     .heightIn(min = 48.dp)
                     .testTag("devhub_mode_upgrade")
             )
+        }
+
+        if (devHubMode == DevHubMode.ZipProjectStudio) {
+            ZipProjectWorkspaceSection(
+                selectedPersona = selectedPersona,
+                savedWorkspaces = savedWorkspaces,
+                activeWorkspace = activeWorkspace,
+                selectedFilePath = selectedWorkspaceFilePath,
+                openFileContent = openFileContent,
+                isOpenFileModified = isOpenFileModified,
+                newFilePathInput = newFilePathInput,
+                codeAiInstruction = codeAiInstruction,
+                projectAuditState = projectAuditState,
+                codePatchLoading = codePatchLoading,
+                codePatchSuggestion = codePatchSuggestion,
+                errorLogInput = errorLogInput,
+                workspaceStatusMessage = workspaceStatusMessage,
+                gitHubUsername = username,
+                gitHubToken = token,
+                gitHubTargetRepo = gitHubTargetRepo,
+                gitHubBranch = gitHubBranch,
+                gitHubCommitMessage = gitHubCommitMessage,
+                gitHubPushPrivate = gitHubPushPrivate,
+                gitHubPushState = gitHubPushState,
+                onImportZipUri = onImportZipUri,
+                onExportZipUri = onExportZipUri,
+                onSelectWorkspace = onSelectWorkspace,
+                onDeleteWorkspace = onDeleteWorkspace,
+                onOpenFile = onOpenWorkspaceFile,
+                onOpenFileContentChange = onOpenFileContentChange,
+                onSaveOpenFile = onSaveOpenFile,
+                onNewFilePathChange = onNewFilePathChange,
+                onCreateNewFile = onCreateNewWorkspaceFile,
+                onCodeAiInstructionChange = onCodeAiInstructionChange,
+                onErrorLogChange = onErrorLogChange,
+                onAuditProject = onAuditProject,
+                onGenerateCodePatch = onGenerateCodePatch,
+                onFixWorkspaceError = onFixWorkspaceError,
+                onApplyCodePatch = onApplyCodePatch,
+                onInsertDeployTemplate = onInsertDeployTemplate,
+                onGitHubTargetRepoChange = onGitHubTargetRepoChange,
+                onGitHubBranchChange = onGitHubBranchChange,
+                onGitHubCommitMessageChange = onGitHubCommitMessageChange,
+                onToggleGitHubPushPrivate = onToggleGitHubPushPrivate,
+                onPushToGitHub = onPushToGitHub
+            )
+            return@Column
         }
 
         if (devHubMode == DevHubMode.SelfUpgradeArchitect) {
@@ -134,12 +244,17 @@ fun DevHubScreen(
                 error = upgradeError,
                 capabilityRunInput = capabilityRunInput,
                 capabilityRunState = capabilityRunState,
+                errorLogInput = errorLogInput,
+                selfBugFixLoading = selfBugFixLoading,
+                selfBugFixSuggestion = selfBugFixSuggestion,
                 onUpgradeRequestChange = onUpgradeRequestChange,
                 onRequestUpgradeProposal = onRequestUpgradeProposal,
                 onApproveProposal = onApproveProposal,
                 onRejectProposal = onRejectProposal,
                 onCapabilityRunInputChange = onCapabilityRunInputChange,
-                onRunApprovedCapability = onRunApprovedCapability
+                onRunApprovedCapability = onRunApprovedCapability,
+                onErrorLogChange = onErrorLogChange,
+                onFixSelfError = onFixSelfError
             )
             return@Column
         }
@@ -497,12 +612,17 @@ private fun SelfUpgradeArchitectSection(
     error: String?,
     capabilityRunInput: String,
     capabilityRunState: AiUiState,
+    errorLogInput: String,
+    selfBugFixLoading: Boolean,
+    selfBugFixSuggestion: AiCodePatchSuggestion?,
     onUpgradeRequestChange: (String) -> Unit,
     onRequestUpgradeProposal: () -> Unit,
     onApproveProposal: (Long) -> Unit,
     onRejectProposal: (Long) -> Unit,
     onCapabilityRunInputChange: (String) -> Unit,
-    onRunApprovedCapability: (UpgradeProposal) -> Unit
+    onRunApprovedCapability: (UpgradeProposal) -> Unit,
+    onErrorLogChange: (String) -> Unit,
+    onFixSelfError: () -> Unit
 ) {
     val context = LocalContext.current
 
@@ -568,6 +688,83 @@ private fun SelfUpgradeArchitectSection(
 
         if (error != null) {
             Text(text = error, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+        }
+    }
+
+    // Self-App & Self-Upgrade Error / Bug Diagnosis Card
+    StudioCard {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(Icons.Filled.Build, contentDescription = "Self Bug Fixer", tint = MaterialTheme.colorScheme.secondary)
+            Text(
+                text = "رفع ارور و شکار باگ کد خودِ هوش مصنوعی",
+                style = MaterialTheme.typography.titleMedium
+            )
+        }
+
+        OutlinedTextField(
+            value = errorLogInput,
+            onValueChange = onErrorLogChange,
+            label = { Text("لاگ خطای Gradle/Kotlin یا باگ پچ ارتقا را اینجا بگذار...") },
+            minLines = 2,
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("self_error_log_input")
+        )
+
+        Button(
+            onClick = onFixSelfError,
+            enabled = !selfBugFixLoading && errorLogInput.isNotBlank(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .testTag("fix_self_error_button"),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+        ) {
+            if (selfBugFixLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onSecondary
+                )
+            } else {
+                Icon(Icons.Filled.Build, contentDescription = null, modifier = Modifier.size(18.dp))
+            }
+            Spacer(Modifier.width(8.dp))
+            Text(if (selfBugFixLoading) "در حال عیب‌یابی ریشه‌ای..." else "تحلیل علت ارور و تولید کد اصلاح‌شده")
+        }
+
+        if (selfBugFixSuggestion != null) {
+            Surface(shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.surfaceVariant) {
+                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = selfBugFixSuggestion.summaryPersian,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = selfBugFixSuggestion.updatedFileContent,
+                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            AndroidIntentActions.copyToClipboard(
+                                context,
+                                selfBugFixSuggestion.targetFilePath,
+                                selfBugFixSuggestion.updatedFileContent
+                            )
+                        },
+                        modifier = Modifier.heightIn(min = 48.dp)
+                    ) {
+                        Icon(Icons.Filled.ContentCopy, contentDescription = "Copy Bugfix", modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("کپی کد اصلاح‌شده")
+                    }
+                }
+            }
         }
     }
 

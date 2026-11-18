@@ -92,7 +92,16 @@ import com.example.ui.components.StatusPill
 import com.example.ui.components.StudioCard
 import com.example.ui.components.StudioDropdownSelector
 import com.example.ui.components.VideoChatStage
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Psychology
+import com.example.model.CompositeEmotion
+import com.example.model.DeepThinkPolicy
+import com.example.model.MemoryTier
+import com.example.model.PendingDeepThinkRequest
+import com.example.model.PersonaMindState
+import com.example.ui.components.MindAndEmotionSection
 
 @Composable
 fun SecretaryScreen(
@@ -126,6 +135,13 @@ fun SecretaryScreen(
     advisoryProfileInput: String,
     advisoryGoalInput: String,
     advisoryAiState: AiUiState,
+    activeMindState: PersonaMindState,
+    deepThinkPolicy: DeepThinkPolicy,
+    pendingDeepThink: PendingDeepThinkRequest?,
+    chatThinkingStreamingText: String?,
+    healingLoading: Boolean,
+    decisionLoading: Boolean,
+    neuroSyncLoading: Boolean,
     onSelectPersona: (AssistantPersona) -> Unit,
     onSpeakText: (String, AssistantPersona) -> Unit,
     onStopSpeaking: () -> Unit,
@@ -135,6 +151,16 @@ fun SecretaryScreen(
     onSetSttError: (String?) -> Unit,
     onModeChange: (SecretaryMode) -> Unit,
     onSpeechStyleChange: (SpeechStyleMode) -> Unit,
+    onDeepThinkPolicyChange: (DeepThinkPolicy) -> Unit,
+    onConfirmDeepThink: () -> Unit,
+    onDeclineDeepThink: () -> Unit,
+    onTriggerEmotion: (CompositeEmotion) -> Unit,
+    onRunSelfHealing: () -> Unit,
+    onConsolidateMemory: () -> Unit,
+    onAddManualMemory: (MemoryTier, String, String) -> Unit,
+    onPromoteMemory: (Long) -> Unit,
+    onDeleteMemory: (Long) -> Unit,
+    onEvaluateDecision: (String) -> Unit,
     onChatInputChange: (String) -> Unit,
     onSendChatMessage: () -> Unit,
     onClearChat: () -> Unit,
@@ -309,6 +335,21 @@ fun SecretaryScreen(
                 modifier = Modifier
                     .heightIn(min = 48.dp)
                     .testTag("secretary_mode_advisory")
+            )
+            FilterChip(
+                selected = mode == SecretaryMode.MindAndEmotions,
+                onClick = { onModeChange(SecretaryMode.MindAndEmotions) },
+                label = { Text("حافظه، اراده و احساسات") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Filled.AutoAwesome,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                },
+                modifier = Modifier
+                    .heightIn(min = 48.dp)
+                    .testTag("secretary_mode_mind_emotions")
             )
         }
 
@@ -504,6 +545,7 @@ fun SecretaryScreen(
             SecretaryMode.ChatAndVideo -> {
                 ChatAndVideoSection(
                     selectedPersona = selectedPersona,
+                    activeMindState = activeMindState,
                     isSpeaking = isSpeaking,
                     isListening = isListening,
                     rmsLevel = rmsLevel,
@@ -512,7 +554,10 @@ fun SecretaryScreen(
                     sttError = sttError,
                     chatMessages = chatMessages,
                     chatInput = chatInput,
+                    chatThinkingStreamingText = chatThinkingStreamingText,
                     chatStreamingText = chatStreamingText,
+                    pendingDeepThink = pendingDeepThink,
+                    deepThinkPolicy = deepThinkPolicy,
                     chatLoading = chatLoading,
                     chatError = chatError,
                     isVideoStageOpen = isVideoStageOpen,
@@ -524,7 +569,10 @@ fun SecretaryScreen(
                     onSendChatMessage = onSendChatMessage,
                     onClearChat = onClearChat,
                     onSetVideoStageOpen = onSetVideoStageOpen,
-                    onToggleAutoVoice = onToggleAutoVoice
+                    onToggleAutoVoice = onToggleAutoVoice,
+                    onDeepThinkPolicyChange = onDeepThinkPolicyChange,
+                    onConfirmDeepThink = onConfirmDeepThink,
+                    onDeclineDeepThink = onDeclineDeepThink
                 )
             }
 
@@ -675,6 +723,26 @@ fun SecretaryScreen(
                     onStopSpeaking = onStopSpeaking
                 )
             }
+
+            SecretaryMode.MindAndEmotions -> {
+                MindAndEmotionSection(
+                    selectedPersona = selectedPersona,
+                    mindState = activeMindState,
+                    healingLoading = healingLoading,
+                    decisionLoading = decisionLoading,
+                    neuroSyncLoading = neuroSyncLoading,
+                    isSpeaking = isSpeaking,
+                    onTriggerEmotion = onTriggerEmotion,
+                    onRunSelfHealing = onRunSelfHealing,
+                    onConsolidateMemory = onConsolidateMemory,
+                    onAddManualMemory = onAddManualMemory,
+                    onPromoteMemory = onPromoteMemory,
+                    onDeleteMemory = onDeleteMemory,
+                    onEvaluateDecision = onEvaluateDecision,
+                    onSpeakText = { text -> onSpeakText(text, selectedPersona) },
+                    onStopSpeaking = onStopSpeaking
+                )
+            }
         }
     }
 }
@@ -738,6 +806,7 @@ private fun SpeechStyleCard(
 @Composable
 private fun ChatAndVideoSection(
     selectedPersona: AssistantPersona,
+    activeMindState: PersonaMindState,
     isSpeaking: Boolean,
     isListening: Boolean,
     rmsLevel: Float,
@@ -746,7 +815,10 @@ private fun ChatAndVideoSection(
     sttError: String?,
     chatMessages: List<ChatMessage>,
     chatInput: String,
+    chatThinkingStreamingText: String?,
     chatStreamingText: String?,
+    pendingDeepThink: PendingDeepThinkRequest?,
+    deepThinkPolicy: DeepThinkPolicy,
     chatLoading: Boolean,
     chatError: String?,
     isVideoStageOpen: Boolean,
@@ -758,7 +830,10 @@ private fun ChatAndVideoSection(
     onSendChatMessage: () -> Unit,
     onClearChat: () -> Unit,
     onSetVideoStageOpen: (Boolean) -> Unit,
-    onToggleAutoVoice: () -> Unit
+    onToggleAutoVoice: () -> Unit,
+    onDeepThinkPolicyChange: (DeepThinkPolicy) -> Unit,
+    onConfirmDeepThink: () -> Unit,
+    onDeclineDeepThink: () -> Unit
 ) {
     val context = LocalContext.current
     val lastPersonaReply = chatStreamingText?.takeIf { it.isNotBlank() }
@@ -791,13 +866,18 @@ private fun ChatAndVideoSection(
             }
         }
 
-        // Engine Status Pills
+        // Engine Status Pills + Live Emotional Pulse
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            StatusPill(
+                label = "حس زنده: ${activeMindState.neuro.activeEmotion.persianLabel}",
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+            )
             StatusPill(
                 label = if (isListening) "STT: در حال گوش دادن..." else if (isSpeechRecognizerAvailable) "ویس به چت (STT): آماده" else "ویس به چت: سیستم",
                 containerColor = if (isListening) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceVariant,
@@ -808,6 +888,22 @@ private fun ChatAndVideoSection(
                 containerColor = if (isSpeaking) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
                 contentColor = if (isSpeaking) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+
+        if (activeMindState.neuro.innerFeelingWhisper.isNotBlank()) {
+            Surface(
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f)
+            ) {
+                Text(
+                    text = "احساس درونی ${selectedPersona.persianName}: «${activeMindState.neuro.innerFeelingWhisper}»",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 8.dp)
+                )
+            }
         }
 
         Row(
@@ -836,6 +932,29 @@ private fun ChatAndVideoSection(
                 onCheckedChange = { onToggleAutoVoice() },
                 modifier = Modifier.testTag("auto_voice_switch")
             )
+        }
+
+        Text(
+            text = "حالت تفکر دیپ‌سیک‌طور (سریع برای سوالات سخت، نرمال برای سوالات ساده):",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            DeepThinkPolicy.entries.forEach { policy ->
+                FilterChip(
+                    selected = deepThinkPolicy == policy,
+                    onClick = { onDeepThinkPolicyChange(policy) },
+                    label = { Text(policy.persianLabel) },
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .testTag("deep_think_policy_${policy.name}")
+                )
+            }
         }
 
         Button(
@@ -957,10 +1076,127 @@ private fun ChatAndVideoSection(
                             }
                         }
 
+                        if (msg.thinkingSummary.isNotBlank()) {
+                            var showThought by remember(msg.id) { mutableStateOf(false) }
+                            Surface(
+                                shape = MaterialTheme.shapes.small,
+                                color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.45f)
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { showThought = !showThought }
+                                        .padding(8.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "تحلیل سریع (${selectedPersona.persianName})",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.tertiary
+                                        )
+                                        Icon(
+                                            imageVector = if (showThought) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                                            contentDescription = "Toggle Thinking Summary",
+                                            tint = MaterialTheme.colorScheme.tertiary
+                                        )
+                                    }
+                                    AnimatedVisibility(visible = showThought) {
+                                        Text(
+                                            text = msg.thinkingSummary,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(top = 6.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
                         Text(
                             text = msg.text,
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
+
+            if (pendingDeepThink != null) {
+                Surface(
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.55f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "سوال تخصصی/تحلیلی شناسایی شد — اجازه تحلیل سریع بدهم؟",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                        if (pendingDeepThink.reason.isNotBlank()) {
+                            Text(
+                                text = pendingDeepThink.reason,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = onConfirmDeepThink,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .heightIn(min = 48.dp)
+                                    .testTag("confirm_deep_think_button"),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)
+                            ) {
+                                Text("بله، تحلیل کن و جواب بده")
+                            }
+                            OutlinedButton(
+                                onClick = onDeclineDeepThink,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .heightIn(min = 48.dp)
+                                    .testTag("decline_deep_think_button")
+                            ) {
+                                Text("نه، همینطوری جواب بده")
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (!chatThinkingStreamingText.isNullOrBlank()) {
+                Surface(
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.4f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "تحلیل سریع در لحظه (Deep Think)...",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.tertiary
+                        )
+                        Text(
+                            text = chatThinkingStreamingText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }

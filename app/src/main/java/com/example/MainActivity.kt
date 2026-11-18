@@ -102,6 +102,8 @@ fun StudioAppRoot(
     val currentDestination by studioViewModel.currentDestination.collectAsStateWithLifecycle()
     val studioSection by studioViewModel.studioSection.collectAsStateWithLifecycle()
 
+    val activeMindState by studioViewModel.activeMindState.collectAsStateWithLifecycle()
+
     var isSpeaking by remember { mutableStateOf(false) }
     val voicePlayer = remember(context) {
         PersonaVoicePlayer(context) { speaking -> isSpeaking = speaking }
@@ -113,7 +115,7 @@ fun StudioAppRoot(
             onPartialTranscript = { partial -> studioViewModel.onSttPartialTranscript(partial) },
             onFinalTranscript = { transcript ->
                 studioViewModel.sendChatMessage(overrideText = transcript) { reply, persona ->
-                    voicePlayer.speak(reply, persona)
+                    voicePlayer.speak(reply, persona, activeMindState.neuro.activeEmotion)
                 }
             },
             onRmsLevel = { rms -> studioViewModel.onSttRmsLevel(rms) },
@@ -154,8 +156,14 @@ fun StudioAppRoot(
     val advisoryProfileInput by studioViewModel.advisoryProfileInput.collectAsStateWithLifecycle()
     val advisoryGoalInput by studioViewModel.advisoryGoalInput.collectAsStateWithLifecycle()
     val advisoryAiState by studioViewModel.advisoryAiState.collectAsStateWithLifecycle()
+    val deepThinkPolicy by studioViewModel.deepThinkPolicy.collectAsStateWithLifecycle()
+    val pendingDeepThink by studioViewModel.pendingDeepThink.collectAsStateWithLifecycle()
+    val chatThinkingStreamingText by studioViewModel.chatThinkingStreamingText.collectAsStateWithLifecycle()
+    val healingLoading by studioViewModel.healingLoading.collectAsStateWithLifecycle()
+    val decisionLoading by studioViewModel.decisionLoading.collectAsStateWithLifecycle()
+    val neuroSyncLoading by studioViewModel.neuroSyncLoading.collectAsStateWithLifecycle()
 
-    // GitHub & Coding Apps + Self-Upgrade states
+    // GitHub & Coding Apps + Self-Upgrade + ZIP Project Workspace states
     val devHubMode by studioViewModel.devHubMode.collectAsStateWithLifecycle()
     val gitHubUsername by studioViewModel.gitHubUsername.collectAsStateWithLifecycle()
     val gitHubToken by studioViewModel.gitHubToken.collectAsStateWithLifecycle()
@@ -167,6 +175,25 @@ fun StudioAppRoot(
     val upgradeError by studioViewModel.upgradeError.collectAsStateWithLifecycle()
     val capabilityRunInput by studioViewModel.capabilityRunInput.collectAsStateWithLifecycle()
     val capabilityRunState by studioViewModel.capabilityRunState.collectAsStateWithLifecycle()
+    val savedWorkspaces by studioViewModel.savedWorkspaces.collectAsStateWithLifecycle()
+    val activeWorkspace by studioViewModel.activeWorkspace.collectAsStateWithLifecycle()
+    val selectedWorkspaceFilePath by studioViewModel.selectedWorkspaceFilePath.collectAsStateWithLifecycle()
+    val openFileContent by studioViewModel.openFileContent.collectAsStateWithLifecycle()
+    val isOpenFileModified by studioViewModel.isOpenFileModified.collectAsStateWithLifecycle()
+    val newFilePathInput by studioViewModel.newFilePathInput.collectAsStateWithLifecycle()
+    val codeAiInstruction by studioViewModel.codeAiInstructionInput.collectAsStateWithLifecycle()
+    val projectAuditState by studioViewModel.projectAuditState.collectAsStateWithLifecycle()
+    val codePatchLoading by studioViewModel.codePatchLoading.collectAsStateWithLifecycle()
+    val codePatchSuggestion by studioViewModel.codePatchSuggestion.collectAsStateWithLifecycle()
+    val errorLogInput by studioViewModel.errorLogInput.collectAsStateWithLifecycle()
+    val selfBugFixLoading by studioViewModel.selfBugFixLoading.collectAsStateWithLifecycle()
+    val selfBugFixSuggestion by studioViewModel.selfBugFixSuggestion.collectAsStateWithLifecycle()
+    val workspaceStatusMessage by studioViewModel.workspaceStatusMessage.collectAsStateWithLifecycle()
+    val gitHubTargetRepo by studioViewModel.gitHubTargetRepoInput.collectAsStateWithLifecycle()
+    val gitHubBranch by studioViewModel.gitHubBranchInput.collectAsStateWithLifecycle()
+    val gitHubCommitMessage by studioViewModel.gitHubCommitMessageInput.collectAsStateWithLifecycle()
+    val gitHubPushPrivate by studioViewModel.gitHubPushPrivate.collectAsStateWithLifecycle()
+    val gitHubPushState by studioViewModel.gitHubPushState.collectAsStateWithLifecycle()
 
     // Creative Studio states
     val charName by studioViewModel.charName.collectAsStateWithLifecycle()
@@ -286,23 +313,54 @@ fun StudioAppRoot(
                                 advisoryProfileInput = advisoryProfileInput,
                                 advisoryGoalInput = advisoryGoalInput,
                                 advisoryAiState = advisoryAiState,
+                                activeMindState = activeMindState,
+                                deepThinkPolicy = deepThinkPolicy,
+                                pendingDeepThink = pendingDeepThink,
+                                chatThinkingStreamingText = chatThinkingStreamingText,
+                                healingLoading = healingLoading,
+                                decisionLoading = decisionLoading,
+                                neuroSyncLoading = neuroSyncLoading,
                                 onSelectPersona = studioViewModel::selectPersona,
-                                onSpeakText = { text, persona -> voicePlayer.speak(text, persona) },
+                                onSpeakText = { text, persona ->
+                                    voicePlayer.speak(text, persona, activeMindState.neuro.activeEmotion)
+                                },
                                 onStopSpeaking = { voicePlayer.stop() },
                                 onStartVoiceListening = { speechRecognizer.startListening() },
                                 onStopVoiceListening = { speechRecognizer.stopListening() },
                                 onVoiceTranscriptFallback = { transcript ->
                                     studioViewModel.sendChatMessage(overrideText = transcript) { reply, persona ->
-                                        voicePlayer.speak(reply, persona)
+                                        voicePlayer.speak(reply, persona, activeMindState.neuro.activeEmotion)
                                     }
                                 },
                                 onSetSttError = studioViewModel::onSttError,
                                 onModeChange = studioViewModel::selectSecretaryMode,
                                 onSpeechStyleChange = studioViewModel::updateSpeechStyle,
+                                onDeepThinkPolicyChange = studioViewModel::updateDeepThinkPolicy,
+                                onConfirmDeepThink = {
+                                    studioViewModel.confirmDeepThinkAnalysis { reply, persona ->
+                                        voicePlayer.speak(reply, persona, activeMindState.neuro.activeEmotion)
+                                    }
+                                },
+                                onDeclineDeepThink = {
+                                    studioViewModel.declineDeepThinkAndReplyNormally { reply, persona ->
+                                        voicePlayer.speak(reply, persona, activeMindState.neuro.activeEmotion)
+                                    }
+                                },
+                                onTriggerEmotion = studioViewModel::triggerCompositeEmotionStimulus,
+                                onRunSelfHealing = studioViewModel::runEmotionalSelfHealingAndGrowth,
+                                onConsolidateMemory = studioViewModel::consolidateChatIntoMemory,
+                                onAddManualMemory = studioViewModel::addManualMemory,
+                                onPromoteMemory = studioViewModel::promoteMemoryToLongTerm,
+                                onDeleteMemory = studioViewModel::deleteMemory,
+                                onEvaluateDecision = { dilemma ->
+                                    studioViewModel.evaluateAutonomousDecision(dilemma) { reply, persona ->
+                                        voicePlayer.speak(reply, persona, activeMindState.neuro.activeEmotion)
+                                    }
+                                },
                                 onChatInputChange = studioViewModel::updateChatInput,
                                 onSendChatMessage = {
                                     studioViewModel.sendChatMessage { reply, persona ->
-                                        voicePlayer.speak(reply, persona)
+                                        voicePlayer.speak(reply, persona, activeMindState.neuro.activeEmotion)
                                     }
                                 },
                                 onClearChat = studioViewModel::clearChatHistory,
@@ -326,7 +384,7 @@ fun StudioAppRoot(
                                 onApplyAdvisoryPreset = studioViewModel::applyAdvisoryPreset,
                                 onGenerateAdvisoryPlan = {
                                     studioViewModel.generateAdvisoryPlan { plan, persona ->
-                                        voicePlayer.speak(plan, persona)
+                                        voicePlayer.speak(plan, persona, activeMindState.neuro.activeEmotion)
                                     }
                                 }
                             )
@@ -334,6 +392,7 @@ fun StudioAppRoot(
 
                         TopDestination.DevHub -> {
                             DevHubScreen(
+                                selectedPersona = selectedPersona,
                                 devHubMode = devHubMode,
                                 username = gitHubUsername,
                                 token = gitHubToken,
@@ -346,6 +405,25 @@ fun StudioAppRoot(
                                 upgradeError = upgradeError,
                                 capabilityRunInput = capabilityRunInput,
                                 capabilityRunState = capabilityRunState,
+                                savedWorkspaces = savedWorkspaces,
+                                activeWorkspace = activeWorkspace,
+                                selectedWorkspaceFilePath = selectedWorkspaceFilePath,
+                                openFileContent = openFileContent,
+                                isOpenFileModified = isOpenFileModified,
+                                newFilePathInput = newFilePathInput,
+                                codeAiInstruction = codeAiInstruction,
+                                projectAuditState = projectAuditState,
+                                codePatchLoading = codePatchLoading,
+                                codePatchSuggestion = codePatchSuggestion,
+                                errorLogInput = errorLogInput,
+                                selfBugFixLoading = selfBugFixLoading,
+                                selfBugFixSuggestion = selfBugFixSuggestion,
+                                workspaceStatusMessage = workspaceStatusMessage,
+                                gitHubTargetRepo = gitHubTargetRepo,
+                                gitHubBranch = gitHubBranch,
+                                gitHubCommitMessage = gitHubCommitMessage,
+                                gitHubPushPrivate = gitHubPushPrivate,
+                                gitHubPushState = gitHubPushState,
                                 onSelectDevHubMode = studioViewModel::selectDevHubMode,
                                 onUsernameChange = studioViewModel::updateGitHubUsername,
                                 onTokenChange = studioViewModel::updateGitHubToken,
@@ -362,7 +440,29 @@ fun StudioAppRoot(
                                 onApproveProposal = studioViewModel::approveUpgradeProposal,
                                 onRejectProposal = studioViewModel::rejectUpgradeProposal,
                                 onCapabilityRunInputChange = studioViewModel::updateCapabilityRunInput,
-                                onRunApprovedCapability = studioViewModel::runApprovedCapability
+                                onRunApprovedCapability = studioViewModel::runApprovedCapability,
+                                onImportZipUri = { uri -> studioViewModel.importProjectZip(context, uri) },
+                                onExportZipUri = { uri -> studioViewModel.exportActiveWorkspaceZip(context, uri) },
+                                onSelectWorkspace = studioViewModel::selectWorkspace,
+                                onDeleteWorkspace = studioViewModel::deleteWorkspace,
+                                onOpenWorkspaceFile = studioViewModel::openWorkspaceFile,
+                                onOpenFileContentChange = studioViewModel::updateOpenFileContent,
+                                onSaveOpenFile = studioViewModel::saveOpenFileToDisk,
+                                onNewFilePathChange = studioViewModel::updateNewFilePathInput,
+                                onCreateNewWorkspaceFile = studioViewModel::createNewWorkspaceFile,
+                                onCodeAiInstructionChange = studioViewModel::updateCodeAiInstruction,
+                                onErrorLogChange = studioViewModel::updateErrorLogInput,
+                                onAuditProject = studioViewModel::auditActiveWorkspaceProject,
+                                onGenerateCodePatch = studioViewModel::generateAiCodeCompletion,
+                                onFixWorkspaceError = studioViewModel::fixErrorInActiveWorkspace,
+                                onFixSelfError = studioViewModel::fixSelfUpgradeOrAppError,
+                                onApplyCodePatch = studioViewModel::applySuggestedCodePatch,
+                                onInsertDeployTemplate = studioViewModel::insertDeployTemplate,
+                                onGitHubTargetRepoChange = studioViewModel::updateGitHubTargetRepo,
+                                onGitHubBranchChange = studioViewModel::updateGitHubBranch,
+                                onGitHubCommitMessageChange = studioViewModel::updateGitHubCommitMessage,
+                                onToggleGitHubPushPrivate = studioViewModel::toggleGitHubPushPrivate,
+                                onPushToGitHub = studioViewModel::pushActiveWorkspaceToGitHub
                             )
                         }
 
